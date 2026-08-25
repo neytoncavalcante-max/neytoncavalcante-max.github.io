@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>NinhoCare — Cuidado dos Filhotes</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          cream: '#FAF6EF',
+          sage: { DEFAULT: '#6B8F71', dark: '#516C57', light: '#DDE7DC' },
+          apricot: { DEFAULT: '#E8A868', dark: '#C98A4B', light: '#FBEBD7' },
+          blush: '#F3DAD0',
+          ink: '#3D3229',
+          teal: '#7E9695',
+        },
+        fontFamily: {
+          display: ['Fraunces', 'serif'],
+          body: ['Inter', 'sans-serif'],
+        },
+        borderRadius: {
+          blob: '42% 58% 61% 39% / 45% 41% 59% 55%',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background-color: #FAF6EF; }
+  .font-display { font-family: 'Fraunces', serif; }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #DDE7DC; border-radius: 10px; }
+  .pulse-dot { animation: pulseSoft 2s ease-in-out infinite; }
+  @keyframes pulseSoft {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.85); }
+  }
+  .save-flash { animation: flashIn 0.5s ease-out; }
+  @keyframes flashIn {
+    0% { transform: scale(0.9); opacity: 0.4; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .chip-active { box-shadow: 0 0 0 3px #6B8F71; }
+  .modal-backdrop { backdrop-filter: blur(3px); }
+  .quick-btn:active { transform: scale(0.95); }
+  .timeline-item { animation: slideIn 0.3s ease-out; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  input:focus, button:focus, select:focus { outline: 2px solid #6B8F71; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body class="text-ink min-h-screen pb-10">
+
+<!-- ============ HEADER / STATUS BAR ============ -->
+<header class="sticky top-0 z-30 bg-cream/90 backdrop-blur-md border-b border-sage-light">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 rounded-blob bg-sage flex items-center justify-center text-white">
+        <i data-lucide="paw-print" class="w-5 h-5"></i>
+      </div>
+      <h1 class="font-display text-xl font-semibold text-sage-dark">NinhoCare</h1>
+    </div>
+    <div id="saveIndicator" class="flex items-center gap-1.5 text-xs text-sage-dark bg-sage-light/70 px-3 py-1.5 rounded-full">
+      <span id="saveDot" class="w-2 h-2 rounded-full bg-sage-dark pulse-dot"></span>
+      <span id="saveText">Tudo salvo automaticamente</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-3xl mx-auto px-4 pt-5 space-y-6">
+
+  <!-- ============ PUPPY SELECTOR ============ -->
+  <section>
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-display text-lg font-semibold">Seus filhotes</h2>
+      <button onclick="openPuppyModal()" class="text-xs font-semibold text-sage-dark bg-sage-light px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-sage-light/70 transition">
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Novo filhote
+      </button>
+    </div>
+    <div id="puppySelector" class="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1"></div>
+  </section>
+
+  <div id="emptyState" class="hidden text-center py-16 px-6 bg-white rounded-3xl border border-sage-light">
+    <div class="w-16 h-16 mx-auto rounded-blob bg-apricot-light flex items-center justify-center mb-4">
+      <i data-lucide="heart" class="w-8 h-8 text-apricot-dark"></i>
+    </div>
+    <p class="font-display text-lg font-semibold mb-1">Nenhum filhote cadastrado ainda</p>
+    <p class="text-sm text-ink/60 mb-4">Cadastre o primeiro filhote para começar a acompanhar mamadas, peso e cuidados diários.</p>
+    <button onclick="openPuppyModal()" class="bg-sage text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:bg-sage-dark transition">Cadastrar filhote</button>
+  </div>
+
+  <div id="appContent" class="hidden space-y-6">
+
+    <!-- ============ DASHBOARD SUMMARY ============ -->
+    <section>
+      <h2 class="font-display text-lg font-semibold mb-2">Resumo agora</h2>
+      <div id="dashboardCards" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+    </section>
+
+    <!-- ============ QUICK ACTIONS ============ -->
+    <section>
+      <h2 class="font-display text-lg font-semibold mb-2">Registrar agora</h2>
+      <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        <button class="quick-btn" data-type="xixi" onclick="quickLog('xixi')">
+          <span class="block bg-white border border-sage-light rounded-2xl py-4 flex flex-col items-center gap-1.5 hover:border-sage transition shadow-sm">
+            <i data-lucide="droplet" class="w-6 h-6 text-teal"></i>
+            <span class="text-xs font-semibold">Xixi</span>
+          </span>
+        </button>
+        <button class="quick-btn" data-type="coco" onclick="quickLog('coco')">
+          <span class="block bg-white border border-sage-light rounded-2xl py-4 flex flex-col items-center gap-1.5 hover:border-sage transition shadow-sm">
+            <i data-lucide="circle-dot" class="w-6 h-6 text-apricot-dark"></i>
+            <span class="text-xs font-semibold">Cocô</span>
+          </span>
+        </button>
+        <button class="quick-btn" data-type="agua" onclick="quickLog('agua')">
+          <span class="block bg-white border border-sage-light rounded-2xl py-4 flex flex-col items-center gap-1.5 hover:border-sage transition shadow-sm">
+            <i data-lucide="glass-water" class="w-6 h-6 text-teal"></i>
+            <span class="text-xs font-semibold">Água</span>
+          </span>
+        </button>
+        <button class="quick-btn" onclick="openFeedModal()">
+          <span class="block bg-white border border-sage-light rounded-2xl py-4 flex flex-col items-center gap-1.5 hover:border-sage transition shadow-sm">
+            <i data-lucide="milk" class="w-6 h-6 text-sage-dark"></i>
+            <span class="text-xs font-semibold">Mamada</span>
+          </span>
+        </button>
+        <button class="quick-btn" onclick="toggleNap()">
+          <span id="napBtnInner" class="block bg-white border border-sage-light rounded-2xl py-4 flex flex-col items-center gap-1.5 hover:border-sage transition shadow-sm">
+            <i data-lucide="moon" class="w-6 h-6 text-teal"></i>
+            <span id="napBtnLabel" class="text-xs font-semibold">Soneca</span>
+          </span>
+        </button>
+        <button class="quick-btn" onclick="openMedModal()">
+          <span class="block bg-white border border-sage-light rounded-2xl py-4 flex flex-col items-center gap-1.5 hover:border-sage transition shadow-sm">
+            <i data-lucide="syringe" class="w-6 h-6 text-apricot-dark"></i>
+            <span class="text-xs font-semibold">Remédio</span>
+          </span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ ALERTS ============ -->
+    <section id="alertsSection" class="hidden">
+      <div id="alertsBox" class="bg-apricot-light border border-apricot/40 rounded-2xl p-4 flex items-start gap-3">
+        <i data-lucide="bell-ring" class="w-5 h-5 text-apricot-dark shrink-0 mt-0.5"></i>
+        <div id="alertsText" class="text-sm text-ink"></div>
+      </div>
+    </section>
+
+    <!-- ============ WEIGHT / GROWTH ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-display text-lg font-semibold">Peso e crescimento</h2>
+        <button onclick="openWeightModal()" class="text-xs font-semibold text-sage-dark bg-sage-light px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-sage-light/70 transition">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i> Registrar peso
+        </button>
+      </div>
+      <div class="h-56">
+        <canvas id="weightChart"></canvas>
+      </div>
+    </section>
+
+    <!-- ============ TIMELINE / HISTORY ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <h2 class="font-display text-lg font-semibold">Linha do tempo</h2>
+        <select id="filterType" onchange="renderTimeline()" class="text-xs font-semibold bg-cream border border-sage-light rounded-full px-3 py-1.5">
+          <option value="all">Todos</option>
+          <option value="xixi">Xixi</option>
+          <option value="coco">Cocô</option>
+          <option value="agua">Água</option>
+          <option value="mamada">Mamada</option>
+          <option value="soneca">Soneca</option>
+          <option value="remedio">Remédio/Vacina</option>
+          <option value="peso">Peso</option>
+        </select>
+      </div>
+      <div id="timelineList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+    </section>
+
+    <!-- ============ BACKUP ============ -->
+    <section class="bg-sage-light/50 rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-sm text-sage-dark">
+        <i data-lucide="shield-check" class="w-5 h-5"></i>
+        <span>Seus dados ficam salvos neste navegador. Faça backup por segurança.</span>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="exportBackup()" class="text-xs font-semibold bg-white text-sage-dark px-3 py-2 rounded-full flex items-center gap-1.5 hover:bg-sage-light transition border border-sage-light">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Exportar backup
+        </button>
+        <label class="text-xs font-semibold bg-white text-sage-dark px-3 py-2 rounded-full flex items-center gap-1.5 hover:bg-sage-light transition border border-sage-light cursor-pointer">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i> Restaurar backup
+          <input type="file" accept=".json" onchange="importBackup(event)" class="hidden">
+        </label>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ============ MODALS ============ -->
+<div id="modalRoot" class="fixed inset-0 z-40 hidden modal-backdrop bg-ink/30 flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this) closeModal()">
+  <div id="modalCard" class="bg-cream w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-5 max-h-[85vh] overflow-y-auto"></div>
+</div>
+
+<script>
+/* ============================================================
+   STATE + PERSISTENCE
+   ============================================================ */
+const STORAGE_KEY = 'ninhocare_data_v1';
+let state = loadState();
+let activeNap = null; // {puppyId, start}
+
+function defaultState() {
+  return { puppies: [], events: [], activePuppyId: null, settings: { feedIntervalHours: 3 } };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    return { ...defaultState(), ...parsed };
+  } catch (e) {
+    console.error('Erro ao carregar dados salvos', e);
+    return defaultState();
+  }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    flashSaved();
+  } catch (e) {
+    console.error('Erro ao salvar', e);
+    document.getElementById('saveText').textContent = 'Erro ao salvar — verifique o espaço do navegador';
+  }
+}
+
+let flashTimeout;
+function flashSaved() {
+  const dot = document.getElementById('saveDot');
+  const text = document.getElementById('saveText');
+  text.textContent = '✓ Salvo agora';
+  dot.classList.remove('pulse-dot');
+  dot.classList.add('save-flash');
+  clearTimeout(flashTimeout);
+  flashTimeout = setTimeout(() => {
+    text.textContent = 'Tudo salvo automaticamente';
+    dot.classList.add('pulse-dot');
+    dot.classList.remove('save-flash');
+  }, 1500);
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+/* ============================================================
+   PUPPY MANAGEMENT
+   ============================================================ */
+const AVATAR_COLORS = ['#6B8F71', '#E8A868', '#7E9695', '#C98A4B', '#516C57', '#D98D8D'];
+
+function getActivePuppy() {
+  return state.puppies.find(p => p.id === state.activePuppyId) || null;
+}
+
+function renderPuppySelector() {
+  const el = document.getElementById('puppySelector');
+  el.innerHTML = '';
+  state.puppies.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'shrink-0 flex flex-col items-center gap-1.5';
+    btn.onclick = () => { state.activePuppyId = p.id; saveState(); renderAll(); };
+    const isActive = p.id === state.activePuppyId;
+    btn.innerHTML = `
+      <span class="w-14 h-14 rounded-blob flex items-center justify-center text-white font-display font-semibold text-lg ${isActive ? 'chip-active' : ''}" style="background:${p.color}">
+        ${p.name.slice(0,2).toUpperCase()}
+      </span>
+      <span class="text-xs font-semibold ${isActive ? 'text-sage-dark' : 'text-ink/60'}">${p.name}</span>
+    `;
+    el.appendChild(btn);
+  });
+  lucide.createIcons();
+}
+
+function openPuppyModal() {
+  openModal(`
+    <h3 class="font-display text-lg font-semibold mb-4">Novo filhote</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-ink/60">Nome</label>
+        <input id="fName" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: Marrom">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-xs font-semibold text-ink/60">Espécie</label>
+          <select id="fSpecies" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white">
+            <option value="Cão">Cão</option>
+            <option value="Gato">Gato</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-ink/60">Raça (opcional)</label>
+          <input id="fBreed" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="SRD">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-ink/60">Data de nascimento (estimada)</label>
+        <input id="fBirth" type="date" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-ink/60">Peso inicial (g, opcional)</label>
+        <input id="fWeight" type="number" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: 180">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-ink/60 mb-1 block">Cor de identificação</label>
+        <div id="colorPicker" class="flex gap-2"></div>
+      </div>
+    </div>
+    <button onclick="savePuppy()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Salvar filhote</button>
+  `);
+  let selectedColor = AVATAR_COLORS[state.puppies.length % AVATAR_COLORS.length];
+  const picker = document.getElementById('colorPicker');
+  AVATAR_COLORS.forEach(c => {
+    const dot = document.createElement('button');
+    dot.className = 'w-8 h-8 rounded-full border-2 border-white shadow';
+    dot.style.background = c;
+    dot.onclick = () => { selectedColor = c; [...picker.children].forEach(d => d.classList.remove('ring-2','ring-offset-2','ring-sage')); dot.classList.add('ring-2','ring-offset-2','ring-sage'); };
+    picker.appendChild(dot);
+  });
+  picker.children[0].classList.add('ring-2','ring-offset-2','ring-sage');
+  window._selectedColorGetter = () => selectedColor;
+}
+
+function savePuppy() {
+  const name = document.getElementById('fName').value.trim();
+  if (!name) { alert('Digite um nome para o filhote.'); return; }
+  const p = {
+    id: uid(),
+    name,
+    species: document.getElementById('fSpecies').value,
+    breed: document.getElementById('fBreed').value.trim(),
+    birthDate: document.getElementById('fBirth').value || null,
+    color: window._selectedColorGetter(),
+    weights: []
+  };
+  const initW = parseFloat(document.getElementById('fWeight').value);
+  if (initW) p.weights.push({ date: new Date().toISOString(), weight: initW });
+  state.puppies.push(p);
+  state.activePuppyId = p.id;
+  saveState();
+  closeModal();
+  renderAll();
+}
+
+/* ============================================================
+   EVENT LOGGING
+   ============================================================ */
+const TYPE_META = {
+  xixi:   { label: 'Xixi',           icon: 'droplet' },
+  coco:   { label: 'Cocô',           icon: 'circle-dot' },
+  agua:   { label: 'Água',           icon: 'glass-water' },
+  mamada: { label: 'Mamada',         icon: 'milk' },
+  soneca: { label: 'Soneca',         icon: 'moon' },
+  remedio:{ label: 'Remédio/Vacina', icon: 'syringe' },
+  peso:   { label: 'Peso',           icon: 'scale' },
+};
+
+function quickLog(type, extra = {}) {
+  const p = getActivePuppy();
+  if (!p) return;
+  state.events.push({ id: uid(), puppyId: p.id, type, timestamp: new Date().toISOString(), ...extra });
+  saveState();
+  renderAll();
+}
+
+function openFeedModal() {
+  const p = getActivePuppy();
+  if (!p) return;
+  openModal(`
+    <h3 class="font-display text-lg font-semibold mb-4">Registrar mamada — ${p.name}</h3>
+    <label class="text-xs font-semibold text-ink/60">Quantidade (ml)</label>
+    <input id="feedQty" type="number" step="0.1" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: 7">
+    <label class="text-xs font-semibold text-ink/60 mt-3 block">Observação (opcional)</label>
+    <input id="feedNote" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: mamou bem">
+    <button onclick="saveFeed()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Registrar mamada</button>
+  `);
+}
+function saveFeed() {
+  const qty = parseFloat(document.getElementById('feedQty').value) || null;
+  const note = document.getElementById('feedNote').value.trim();
+  quickLog('mamada', { qty, note });
+  closeModal();
+}
+
+function openMedModal() {
+  const p = getActivePuppy();
+  if (!p) return;
+  openModal(`
+    <h3 class="font-display text-lg font-semibold mb-4">Remédio ou vacina — ${p.name}</h3>
+    <label class="text-xs font-semibold text-ink/60">Nome do produto</label>
+    <input id="medName" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: Vermífugo">
+    <label class="text-xs font-semibold text-ink/60 mt-3 block">Observação (opcional)</label>
+    <input id="medNote" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Dose, orientação do vet...">
+    <button onclick="saveMed()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Registrar</button>
+  `);
+}
+function saveMed() {
+  const name = document.getElementById('medName').value.trim();
+  if (!name) { alert('Digite o nome do remédio ou vacina.'); return; }
+  const note = document.getElementById('medNote').value.trim();
+  quickLog('remedio', { name, note });
+  closeModal();
+}
+
+function toggleNap() {
+  const p = getActivePuppy();
+  if (!p) return;
+  if (activeNap && activeNap.puppyId === p.id) {
+    const durationMin = Math.round((Date.now() - activeNap.start) / 60000);
+    state.events.push({ id: uid(), puppyId: p.id, type: 'soneca', timestamp: new Date(activeNap.start).toISOString(), durationMin });
+    activeNap = null;
+    saveState();
+  } else {
+    activeNap = { puppyId: p.id, start: Date.now() };
+  }
+  renderAll();
+}
+
+function openWeightModal() {
+  const p = getActivePuppy();
+  if (!p) return;
+  openModal(`
+    <h3 class="font-display text-lg font-semibold mb-4">Registrar peso — ${p.name}</h3>
+    <label class="text-xs font-semibold text-ink/60">Peso (gramas)</label>
+    <input id="weightVal" type="number" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: 280">
+    <button onclick="saveWeight()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Salvar peso</button>
+  `);
+}
+function saveWeight() {
+  const p = getActivePuppy();
+  const val = parseFloat(document.getElementById('weightVal').value);
+  if (!val) { alert('Digite um peso válido.'); return; }
+  p.weights.push({ date: new Date().toISOString(), weight: val });
+  state.events.push({ id: uid(), puppyId: p.id, type: 'peso', timestamp: new Date().toISOString(), weight: val });
+  saveState();
+  closeModal();
+  renderAll();
+}
+
+function deleteEvent(id) {
+  state.events = state.events.filter(e => e.id !== id);
+  saveState();
+  renderAll();
+}
+
+/* ============================================================
+   MODAL HELPERS
+   ============================================================ */
+function openModal(html) {
+  document.getElementById('modalCard').innerHTML = html;
+  document.getElementById('modalRoot').classList.remove('hidden');
+  lucide.createIcons();
+}
+function closeModal() {
+  document.getElementById('modalRoot').classList.add('hidden');
+}
+
+/* ============================================================
+   RENDERING
+   ============================================================ */
+function timeAgo(iso) {
+  if (!iso) return '—';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  const remMin = min % 60;
+  if (h < 24) return `há ${h}h${remMin > 0 ? remMin + 'min' : ''}`;
+  const d = Math.floor(h / 24);
+  return `há ${d}d`;
+}
+
+function lastEventOfType(puppyId, type) {
+  const evs = state.events.filter(e => e.puppyId === puppyId && e.type === type);
+  if (!evs.length) return null;
+  return evs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+}
+
+function renderDashboard() {
+  const p = getActivePuppy();
+  const cards = document.getElementById('dashboardCards');
+  if (!p) { cards.innerHTML = ''; return; }
+  const items = [
+    { type: 'mamada', label: 'Última mamada' },
+    { type: 'xixi', label: 'Último xixi' },
+    { type: 'coco', label: 'Último cocô' },
+    { type: 'soneca', label: 'Última soneca' },
+  ];
+  cards.innerHTML = items.map(it => {
+    const ev = lastEventOfType(p.id, it.type);
+    return `
+      <div class="bg-white border border-sage-light rounded-2xl p-3.5">
+        <p class="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">${it.label}</p>
+        <p class="font-display text-lg font-semibold mt-0.5">${ev ? timeAgo(ev.timestamp) : 'Sem registro'}</p>
+      </div>
+    `;
+  }).join('');
+
+  // Alerts: next feeding
+  const lastFeed = lastEventOfType(p.id, 'mamada');
+  const alertsSection = document.getElementById('alertsSection');
+  const alertsText = document.getElementById('alertsText');
+  if (lastFeed) {
+    const intervalMs = state.settings.feedIntervalHours * 3600000;
+    const nextFeedTime = new Date(lastFeed.timestamp).getTime() + intervalMs;
+    const remainingMin = Math.round((nextFeedTime - Date.now()) / 60000);
+    if (remainingMin <= 0) {
+      alertsSection.classList.remove('hidden');
+      alertsText.innerHTML = `<strong>${p.name}</strong> já passou do horário da próxima mamada (atraso de ${Math.abs(remainingMin)} min).`;
+    } else if (remainingMin <= 20) {
+      alertsSection.classList.remove('hidden');
+      alertsText.innerHTML = `Próxima mamada de <strong>${p.name}</strong> em ${remainingMin} min.`;
+    } else {
+      alertsSection.classList.add('hidden');
+    }
+  } else {
+    alertsSection.classList.add('hidden');
+  }
+}
+
+function renderNapButton() {
+  const p = getActivePuppy();
+  const label = document.getElementById('napBtnLabel');
+  const inner = document.getElementById('napBtnInner');
+  if (p && activeNap && activeNap.puppyId === p.id) {
+    label.textContent = 'Acordou';
+    inner.classList.add('bg-apricot-light', 'border-apricot');
+  } else {
+    label.textContent = 'Soneca';
+    inner.classList.remove('bg-apricot-light', 'border-apricot');
+  }
+}
+
+function renderTimeline() {
+  const p = getActivePuppy();
+  const list = document.getElementById('timelineList');
+  if (!p) { list.innerHTML = ''; return; }
+  const filter = document.getElementById('filterType').value;
+  let evs = state.events.filter(e => e.puppyId === p.id);
+  if (filter !== 'all') evs = evs.filter(e => e.type === filter);
+  evs = evs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  if (!evs.length) {
+    list.innerHTML = `<p class="text-sm text-ink/50 text-center py-6">Nenhum registro ainda para ${p.name}.</p>`;
+    return;
+  }
+
+  list.innerHTML = evs.map(e => {
+    const meta = TYPE_META[e.type] || { label: e.type, icon: 'circle' };
+    const time = new Date(e.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    let detail = '';
+    if (e.type === 'mamada' && e.qty) detail = `${e.qty}ml`;
+    if (e.type === 'remedio' && e.name) detail = e.name;
+    if (e.type === 'peso' && e.weight) detail = `${e.weight}g`;
+    if (e.type === 'soneca' && e.durationMin) detail = `${e.durationMin} min`;
+    if (e.note) detail += (detail ? ' — ' : '') + e.note;
+    return `
+      <div class="timeline-item flex items-center gap-3 bg-cream/60 rounded-xl px-3 py-2.5">
+        <div class="w-9 h-9 rounded-full bg-sage-light flex items-center justify-center shrink-0">
+          <i data-lucide="${meta.icon}" class="w-4 h-4 text-sage-dark"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold">${meta.label} ${detail ? `<span class="font-normal text-ink/60">· ${detail}</span>` : ''}</p>
+          <p class="text-[11px] text-ink/50">${time}</p>
+        </div>
+        <button onclick="deleteEvent('${e.id}')" class="text-ink/30 hover:text-red-500 transition p-1">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+  lucide.createIcons();
+}
+
+let chartInstance = null;
+function renderWeightChart() {
+  const p = getActivePuppy();
+  const ctx = document.getElementById('weightChart');
+  if (chartInstance) chartInstance.destroy();
+  if (!p || !p.weights.length) {
+    return;
+  }
+  const sorted = [...p.weights].sort((a, b) => new Date(a.date) - new Date(b.date));
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: sorted.map(w => new Date(w.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })),
+      datasets: [{
+        label: p.name,
+        data: sorted.map(w => w.weight),
+        borderColor: p.color,
+        backgroundColor: p.color + '33',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 4,
+        pointBackgroundColor: p.color,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { title: { display: true, text: 'Peso (g)' }, grace: '10%' },
+      }
+    }
+  });
+}
+
+function renderAll() {
+  const hasPuppies = state.puppies.length > 0;
+  document.getElementById('emptyState').classList.toggle('hidden', hasPuppies);
+  document.getElementById('appContent').classList.toggle('hidden', !hasPuppies);
+  if (hasPuppies && !getActivePuppy()) state.activePuppyId = state.puppies[0].id;
+  renderPuppySelector();
+  renderDashboard();
+  renderNapButton();
+  renderTimeline();
+  renderWeightChart();
+  lucide.createIcons();
+}
+
+/* ============================================================
+   BACKUP / RESTORE
+   ============================================================ */
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `ninhocare-backup-${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!imported.puppies) throw new Error('Formato inválido');
+      if (!confirm('Restaurar este backup vai substituir os dados atuais deste navegador. Continuar?')) return;
+      state = { ...defaultState(), ...imported };
+      saveState();
+      renderAll();
+      alert('Backup restaurado com sucesso!');
+    } catch (err) {
+      alert('Não foi possível ler este arquivo de backup.');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+renderAll();
+setInterval(() => { renderDashboard(); renderNapButton(); }, 30000); // refresh "time ago" labels
+</script>
+</body>
+</html>
