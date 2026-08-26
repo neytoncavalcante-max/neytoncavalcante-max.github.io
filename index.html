@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>NinhoCare — Cuidado dos Filhotes</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Firebase (modo compartilhado / sincronização em tempo real) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script>
@@ -77,9 +80,15 @@
       </div>
       <h1 class="font-display text-xl font-semibold text-sage-dark">NinhoCare</h1>
     </div>
-    <div id="saveIndicator" class="flex items-center gap-1.5 text-xs text-sage-dark bg-sage-light/70 px-3 py-1.5 rounded-full">
-      <span id="saveDot" class="w-2 h-2 rounded-full bg-sage-dark pulse-dot"></span>
-      <span id="saveText">Tudo salvo automaticamente</span>
+    <div class="flex items-center gap-2">
+      <button id="syncBtn" onclick="openSyncModal()" title="Modo compartilhado" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition bg-ink/5 text-ink/50 hover:bg-ink/10">
+        <i data-lucide="users" class="w-3.5 h-3.5"></i>
+        <span id="syncBtnText">Compartilhar</span>
+      </button>
+      <div id="saveIndicator" class="flex items-center gap-1.5 text-xs text-sage-dark bg-sage-light/70 px-3 py-1.5 rounded-full">
+        <span id="saveDot" class="w-2 h-2 rounded-full bg-sage-dark pulse-dot"></span>
+        <span id="saveText">Tudo salvo automaticamente</span>
+      </div>
     </div>
   </div>
 </header>
@@ -181,11 +190,50 @@
       </div>
     </section>
 
+    <!-- ============ WEIGHT COMPARISON (todos os filhotes) ============ -->
+    <section id="compareSection" class="hidden bg-white rounded-3xl border border-sage-light p-4">
+      <h2 class="font-display text-lg font-semibold mb-1">Comparação entre os filhotes</h2>
+      <p class="text-xs text-ink/50 mb-3">Os três lado a lado — veja rapidamente se algum está ficando para trás.</p>
+      <div class="h-56">
+        <canvas id="compareChart"></canvas>
+      </div>
+    </section>
+
     <!-- ============ DOSE CALCULATOR ============ -->
     <section class="bg-white rounded-3xl border border-sage-light p-4">
       <h2 class="font-display text-lg font-semibold mb-1">Dose recomendada (PetMilk)</h2>
       <p class="text-xs text-ink/50 mb-3">Calculada automaticamente a partir da última pesagem registrada.</p>
       <div id="doseCalc" class="grid grid-cols-3 gap-3"></div>
+    </section>
+
+    <!-- ============ REMINDERS (vacina / vermífugo) ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-display text-lg font-semibold">Lembretes de vacina e vermífugo</h2>
+        <button onclick="openReminderModal()" class="text-xs font-semibold text-sage-dark bg-sage-light px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-sage-light/70 transition">
+          <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Agendar
+        </button>
+      </div>
+      <div id="remindersList" class="space-y-2"></div>
+      <p id="remindersEmptyMsg" class="hidden text-sm text-ink/50 text-center py-4">Nenhum lembrete agendado. Toque em "Agendar" para marcar o próximo vermífugo ou vacina.</p>
+    </section>
+
+    <!-- ============ DEVELOPMENT MILESTONES ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <h2 class="font-display text-lg font-semibold mb-1">Marcos de desenvolvimento</h2>
+      <p class="text-xs text-ink/50 mb-3">Toque em cada conquista assim que ela acontecer com este filhote.</p>
+      <div id="milestonesGrid" class="grid grid-cols-2 gap-2"></div>
+    </section>
+
+    <!-- ============ BEHAVIOR NOTES ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <h2 class="font-display text-lg font-semibold mb-1">Observações do dia</h2>
+      <p class="text-xs text-ink/50 mb-3">Anote qualquer coisa: "abriu o olho hoje", "mamou pouco", "muito ativo"...</p>
+      <div class="flex gap-2">
+        <input id="noteInput" type="text" onkeydown="if(event.key==='Enter'&&!event.nativeEvent.isComposing&&event.keyCode!==229){event.preventDefault();saveNote();}" class="flex-1 px-3 py-2.5 rounded-xl border border-sage-light bg-cream" placeholder="Escreva uma observação rápida">
+        <button onclick="saveNote()" class="bg-sage text-white font-semibold px-4 rounded-xl hover:bg-sage-dark transition shrink-0">Salvar</button>
+      </div>
+      <div id="notesList" class="space-y-2 mt-3"></div>
     </section>
 
     <!-- ============ PHOTO DIARY ============ -->
@@ -214,6 +262,8 @@
           <option value="soneca">Soneca</option>
           <option value="remedio">Remédio/Vacina</option>
           <option value="peso">Peso</option>
+          <option value="nota">Observações</option>
+          <option value="marco">Marcos</option>
           <option value="foto">Fotos</option>
         </select>
       </div>
@@ -224,7 +274,7 @@
     <section class="bg-sage-light/50 rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-2 text-sm text-sage-dark">
         <i data-lucide="shield-check" class="w-5 h-5"></i>
-        <span>Seus dados ficam salvos neste navegador. Faça backup por segurança.</span>
+        <span>Seus dados ficam salvos neste navegador. Ative o <strong>modo compartilhado</strong> (botão no topo) para sincronizar com a Kessya, ou faça backup por segurança.</span>
       </div>
       <div class="flex gap-2">
         <button onclick="exportBackup()" class="text-xs font-semibold bg-white text-sage-dark px-3 py-2 rounded-full flex items-center gap-1.5 hover:bg-sage-light transition border border-sage-light">
@@ -281,7 +331,7 @@ function loadState() {
   }
 }
 
-function saveState() {
+function saveState(opts = {}) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     flashSaved();
@@ -289,6 +339,9 @@ function saveState() {
     console.error('Erro ao salvar', e);
     document.getElementById('saveText').textContent = 'Erro ao salvar — espaço do navegador pode estar cheio';
   }
+  // Empurra para a nuvem quando o modo compartilhado está ativo,
+  // exceto quando a mudança veio justamente da nuvem (opts.remote).
+  if (!opts.remote && sync.active) schedulePush();
 }
 
 let flashTimeout;
@@ -307,6 +360,223 @@ function flashSaved() {
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+/* ============================================================
+   MODO COMPARTILHADO — Firebase Firestore (Tip 5)
+   Sincroniza o estado inteiro em tempo real entre aparelhos.
+   ============================================================ */
+const SYNC_KEY = 'ninhocare_sync_v1';
+const DEVICE_KEY = 'ninhocare_device_v1';
+
+function getDeviceId() {
+  let id = localStorage.getItem(DEVICE_KEY);
+  if (!id) { id = uid() + uid(); localStorage.setItem(DEVICE_KEY, id); }
+  return id;
+}
+
+const sync = {
+  active: false,          // conectado e ouvindo o Firestore
+  cfg: null,              // { firebaseConfig, roomId }
+  db: null,               // instância Firestore
+  docRef: null,           // referência do documento compartilhado
+  unsub: null,            // função para cancelar o listener
+  deviceId: getDeviceId(),
+  pushTimer: null,
+  lastPushedAt: 0,        // updatedAt do último write nosso (evita eco)
+  status: 'off',          // off | connecting | online | error
+};
+
+function loadSyncConfig() {
+  try {
+    const raw = localStorage.getItem(SYNC_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveSyncConfig(cfg) {
+  if (cfg) localStorage.setItem(SYNC_KEY, JSON.stringify(cfg));
+  else localStorage.removeItem(SYNC_KEY);
+}
+
+/* Tenta interpretar tanto um JSON puro quanto o trecho
+   "const firebaseConfig = { ... };" que o Firebase mostra no console. */
+function parseFirebaseConfig(text) {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('Configuração não encontrada');
+  const objText = text.slice(start, end + 1);
+  try { return JSON.parse(objText); }
+  catch { return (new Function('return (' + objText + ')'))(); }
+}
+
+function setSyncStatus(status, extra) {
+  sync.status = status;
+  const btn = document.getElementById('syncBtn');
+  const label = document.getElementById('syncBtnText');
+  if (!btn || !label) return;
+  btn.className = 'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition ';
+  const map = {
+    off:        { cls: 'bg-ink/5 text-ink/50 hover:bg-ink/10',            txt: 'Compartilhar' },
+    connecting: { cls: 'bg-apricot-light text-apricot-dark',              txt: 'Conectando…' },
+    online:     { cls: 'bg-sage text-white hover:bg-sage-dark',           txt: extra || 'Sincronizado' },
+    error:      { cls: 'bg-red-100 text-red-600 hover:bg-red-200',        txt: 'Erro de sync' },
+  };
+  const s = map[status] || map.off;
+  btn.className += s.cls;
+  label.textContent = s.txt;
+  lucide.createIcons();
+}
+
+async function initFirebaseSync(cfg, { isNew } = {}) {
+  if (typeof firebase === 'undefined') { alert('Não foi possível carregar o Firebase. Verifique sua conexão com a internet.'); return false; }
+  // Encerra qualquer conexão anterior
+  if (sync.unsub) { try { sync.unsub(); } catch {} sync.unsub = null; }
+  try { firebase.app(); firebase.app().delete(); } catch {}
+
+  setSyncStatus('connecting');
+  try {
+    const app = firebase.initializeApp(cfg.firebaseConfig);
+    sync.db = firebase.firestore(app);
+    sync.cfg = cfg;
+    sync.docRef = sync.db.collection('ninhos').doc(cfg.roomId);
+    sync.active = true;
+
+    // Se é a primeira vez e o documento remoto ainda não existe,
+    // sobe o estado local atual como ponto de partida.
+    const snap = await sync.docRef.get();
+    if (!snap.exists) {
+      await pushNow();
+    }
+
+    // Listener em tempo real
+    sync.unsub = sync.docRef.onSnapshot((doc) => {
+      if (!doc.exists) return;
+      const data = doc.data();
+      if (!data || !data.payload) return;
+      // Ignora o eco do nosso próprio write
+      if (data.updatedBy === sync.deviceId && data.updatedAt === sync.lastPushedAt) return;
+      try {
+        const remote = JSON.parse(data.payload);
+        state = { ...defaultState(), ...remote };
+        saveState({ remote: true });
+        renderAll();
+      } catch (e) { console.error('Erro ao aplicar dados remotos', e); }
+      setSyncStatus('online', 'Sincronizado');
+    }, (err) => {
+      console.error('Erro no listener do Firestore', err);
+      setSyncStatus('error');
+    });
+
+    saveSyncConfig(cfg);
+    setSyncStatus('online', 'Sincronizado');
+    return true;
+  } catch (e) {
+    console.error('Falha ao iniciar Firebase', e);
+    sync.active = false;
+    setSyncStatus('error');
+    alert('Não foi possível conectar ao Firebase. Confira se a configuração está correta e se o Firestore está habilitado no projeto.');
+    return false;
+  }
+}
+
+function schedulePush() {
+  clearTimeout(sync.pushTimer);
+  sync.pushTimer = setTimeout(pushNow, 700); // agrupa mudanças rápidas
+}
+
+async function pushNow() {
+  if (!sync.active || !sync.docRef) return;
+  const updatedAt = Date.now();
+  sync.lastPushedAt = updatedAt;
+  try {
+    await sync.docRef.set({
+      payload: JSON.stringify(state),
+      updatedAt,
+      updatedBy: sync.deviceId,
+    });
+    setSyncStatus('online', 'Sincronizado');
+  } catch (e) {
+    console.error('Erro ao enviar dados', e);
+    setSyncStatus('error');
+  }
+}
+
+function stopSync() {
+  if (sync.unsub) { try { sync.unsub(); } catch {} }
+  try { firebase.app().delete(); } catch {}
+  sync.active = false;
+  sync.unsub = null;
+  sync.docRef = null;
+  sync.cfg = null;
+  saveSyncConfig(null);
+  setSyncStatus('off');
+}
+
+/* --- Interface de configuração --- */
+function openSyncModal() {
+  const connected = sync.active;
+  const cfg = sync.cfg || {};
+  openModal(`
+    <div class="flex items-center gap-2 mb-1">
+      <i data-lucide="users" class="w-5 h-5 text-sage-dark"></i>
+      <h3 class="font-display text-lg font-semibold">Modo compartilhado</h3>
+    </div>
+    <p class="text-xs text-ink/50 mb-4">Você e a Kessya veem e atualizam os mesmos dados em tempo real, de qualquer aparelho.</p>
+
+    ${connected ? `
+      <div class="bg-sage-light rounded-2xl p-3 mb-4 flex items-center gap-2 text-sm text-sage-dark">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span>Conectado à sala <strong>${cfg.roomId || ''}</strong></span>
+      </div>
+      <button onclick="if(confirm('Parar a sincronização neste aparelho? Os dados continuam salvos aqui.')){stopSync();closeModal();}" class="w-full bg-red-50 text-red-600 font-semibold py-3 rounded-full hover:bg-red-100 transition mb-2">Parar sincronização</button>
+      <button onclick="closeModal()" class="w-full text-ink/50 font-semibold py-2">Fechar</button>
+    ` : `
+      <label class="text-xs font-semibold text-ink/60">Configuração do Firebase</label>
+      <p class="text-[11px] text-ink/40 mb-1">Cole aqui o objeto <code>firebaseConfig</code> do seu projeto (Configurações do projeto → Seus apps).</p>
+      <textarea id="fbConfig" rows="6" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white font-mono text-xs" placeholder='{\n  "apiKey": "...",\n  "authDomain": "...",\n  "projectId": "...",\n  "appId": "..."\n}'>${cfg.firebaseConfig ? JSON.stringify(cfg.firebaseConfig, null, 2) : ''}</textarea>
+
+      <label class="text-xs font-semibold text-ink/60 mt-3 block">Nome da sala compartilhada</label>
+      <p class="text-[11px] text-ink/40 mb-1">Um código combinado entre vocês. Quem usar o mesmo nome vê os mesmos dados.</p>
+      <input id="fbRoom" type="text" value="${cfg.roomId || 'ninho-kessya'}" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="ex: ninho-kessya">
+
+      <button onclick="connectSyncFromModal()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition flex items-center justify-center gap-2">
+        <i data-lucide="cloud" class="w-4 h-4"></i> Conectar e sincronizar
+      </button>
+      <details class="mt-3 text-xs text-ink/50">
+        <summary class="cursor-pointer font-semibold">Como conseguir a configuração?</summary>
+        <ol class="list-decimal ml-4 mt-2 space-y-1">
+          <li>Acesse <strong>console.firebase.google.com</strong> e crie um projeto gratuito.</li>
+          <li>No menu, abra <strong>Firestore Database</strong> e clique em <strong>Criar banco de dados</strong> (modo de teste).</li>
+          <li>Em <strong>Configurações do projeto → Seus apps</strong>, adicione um app <strong>Web</strong>.</li>
+          <li>Copie o objeto <code>firebaseConfig</code> mostrado e cole acima.</li>
+          <li>Passe a mesma configuração e o mesmo nome de sala para a Kessya.</li>
+        </ol>
+      </details>
+    `}
+  `);
+}
+
+async function connectSyncFromModal() {
+  const raw = document.getElementById('fbConfig').value.trim();
+  const roomId = document.getElementById('fbRoom').value.trim();
+  if (!raw) { alert('Cole a configuração do Firebase.'); return; }
+  if (!roomId) { alert('Escolha um nome de sala.'); return; }
+  let firebaseConfig;
+  try { firebaseConfig = parseFirebaseConfig(raw); }
+  catch (e) { alert('Não consegui ler a configuração. Cole o objeto firebaseConfig completo.'); return; }
+  if (!firebaseConfig.projectId) { alert('A configuração parece incompleta (faltou o projectId).'); return; }
+  const ok = await initFirebaseSync({ firebaseConfig, roomId }, { isNew: true });
+  if (ok) { closeModal(); renderAll(); }
+}
+
+/* Reconecta automaticamente se já havia sido configurado antes. */
+function restoreSyncIfConfigured() {
+  const cfg = loadSyncConfig();
+  if (cfg && cfg.firebaseConfig && cfg.roomId) {
+    initFirebaseSync(cfg, { isNew: false });
+  } else {
+    setSyncStatus('off');
+  }
+}
 
 /* ============================================================
    SEED — Marrom, Pintadinho e Pretinha com pesos de hoje
@@ -456,7 +726,28 @@ const TYPE_META = {
   remedio:{ label: 'Remédio/Vacina', icon: 'syringe' },
   peso:   { label: 'Peso',           icon: 'scale' },
   foto:   { label: 'Foto',           icon: 'image' },
+  nota:   { label: 'Observação',     icon: 'sticky-note' },
+  marco:  { label: 'Marco',          icon: 'flag' },
 };
+
+/* Marcos de desenvolvimento (checklist de fases) */
+const MILESTONES = [
+  { key: 'olhos',     label: 'Olhos abertos',        icon: 'eye' },
+  { key: 'ouvidos',   label: 'Ouvidos abertos',      icon: 'ear' },
+  { key: 'engatinhar',label: 'Primeiros passos',     icon: 'footprints' },
+  { key: 'caminhar',  label: 'Caminhada firme',      icon: 'move' },
+  { key: 'dente',     label: 'Primeiro dente',       icon: 'sparkles' },
+  { key: 'solido',    label: 'Comida sólida',        icon: 'utensils' },
+  { key: 'brincar',   label: 'Começou a brincar',    icon: 'toy-brick' },
+  { key: 'latir',     label: 'Primeiro latido',      icon: 'volume-2' },
+];
+
+/* Garante que filhotes antigos tenham os campos novos */
+function ensurePuppyFields(p) {
+  if (!p.reminders) p.reminders = [];
+  if (!p.milestones) p.milestones = {};
+  return p;
+}
 
 function quickLog(type, extra = {}) {
   const p = getActivePuppy();
@@ -554,6 +845,177 @@ function deleteEvent(id) {
   state.events = state.events.filter(e => e.id !== id);
   saveState();
   renderAll();
+}
+
+/* ============================================================
+   OBSERVAÇÕES RÁPIDAS (Tip 4)
+   ============================================================ */
+function saveNote() {
+  const p = getActivePuppy();
+  if (!p) return;
+  const input = document.getElementById('noteInput');
+  const text = input.value.trim();
+  if (!text) { input.focus(); return; }
+  quickLog('nota', { note: text });
+  input.value = '';
+}
+
+function renderNotes() {
+  const p = getActivePuppy();
+  const list = document.getElementById('notesList');
+  if (!p) { list.innerHTML = ''; return; }
+  const notes = state.events.filter(e => e.puppyId === p.id && e.type === 'nota')
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, 5);
+  if (!notes.length) { list.innerHTML = ''; return; }
+  list.innerHTML = notes.map(n => {
+    const time = new Date(n.timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    return `
+      <div class="flex items-start gap-2 bg-cream/60 rounded-xl px-3 py-2">
+        <i data-lucide="sticky-note" class="w-4 h-4 text-apricot-dark shrink-0 mt-0.5"></i>
+        <p class="text-sm flex-1 min-w-0"><span class="text-ink/40 text-xs mr-1">${time}</span>${n.note}</p>
+        <button onclick="deleteEvent('${n.id}')" class="text-ink/30 hover:text-red-500 transition p-0.5">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+/* ============================================================
+   LEMBRETES DE VACINA / VERMÍFUGO COM DATA (Tip 3)
+   ============================================================ */
+function openReminderModal() {
+  const p = getActivePuppy();
+  if (!p) return;
+  const today = new Date().toISOString().slice(0, 10);
+  openModal(`
+    <h3 class="font-display text-lg font-semibold mb-4">Agendar lembrete — ${p.name}</h3>
+    <label class="text-xs font-semibold text-ink/60">O quê</label>
+    <input id="remLabel" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: 2ª dose do vermífugo">
+    <label class="text-xs font-semibold text-ink/60 mt-3 block">Data prevista</label>
+    <input id="remDate" type="date" min="${today}" value="${today}" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white">
+    <button onclick="saveReminder()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Salvar lembrete</button>
+  `);
+}
+
+function saveReminder() {
+  const p = getActivePuppy();
+  ensurePuppyFields(p);
+  const label = document.getElementById('remLabel').value.trim();
+  const dueDate = document.getElementById('remDate').value;
+  if (!label) { alert('Descreva o lembrete.'); return; }
+  if (!dueDate) { alert('Escolha uma data.'); return; }
+  p.reminders.push({ id: uid(), label, dueDate });
+  saveState();
+  closeModal();
+  renderAll();
+}
+
+function daysUntil(dueDate) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate + 'T00:00:00');
+  return Math.round((due - today) / 86400000);
+}
+
+function completeReminder(id) {
+  const p = getActivePuppy();
+  ensurePuppyFields(p);
+  const rem = p.reminders.find(r => r.id === id);
+  if (!rem) return;
+  // registra como remédio/vacina concluído na linha do tempo
+  state.events.push({ id: uid(), puppyId: p.id, type: 'remedio', timestamp: new Date().toISOString(), name: rem.label, note: 'Concluído a partir do lembrete' });
+  p.reminders = p.reminders.filter(r => r.id !== id);
+  saveState();
+  renderAll();
+}
+
+function deleteReminder(id) {
+  const p = getActivePuppy();
+  ensurePuppyFields(p);
+  p.reminders = p.reminders.filter(r => r.id !== id);
+  saveState();
+  renderAll();
+}
+
+function renderReminders() {
+  const p = getActivePuppy();
+  const list = document.getElementById('remindersList');
+  const emptyMsg = document.getElementById('remindersEmptyMsg');
+  if (!p) { list.innerHTML = ''; return; }
+  ensurePuppyFields(p);
+  const rems = [...p.reminders].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  if (!rems.length) { list.innerHTML = ''; emptyMsg.classList.remove('hidden'); return; }
+  emptyMsg.classList.add('hidden');
+  list.innerHTML = rems.map(r => {
+    const d = daysUntil(r.dueDate);
+    const dateStr = new Date(r.dueDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    let statusLabel, statusClass, rowClass;
+    if (d < 0) { statusLabel = `Atrasado ${Math.abs(d)}d`; statusClass = 'text-red-600 bg-red-100'; rowClass = 'border-red-200 bg-red-50'; }
+    else if (d === 0) { statusLabel = 'Hoje'; statusClass = 'text-apricot-dark bg-apricot-light'; rowClass = 'border-apricot/40 bg-apricot-light/40'; }
+    else if (d <= 3) { statusLabel = `Em ${d}d`; statusClass = 'text-apricot-dark bg-apricot-light'; rowClass = 'border-apricot/40 bg-apricot-light/40'; }
+    else { statusLabel = `Em ${d}d`; statusClass = 'text-sage-dark bg-sage-light'; rowClass = 'border-sage-light bg-cream/60'; }
+    return `
+      <div class="flex items-center gap-3 border rounded-xl px-3 py-2.5 ${rowClass}">
+        <i data-lucide="calendar-clock" class="w-5 h-5 text-sage-dark shrink-0"></i>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold truncate">${r.label}</p>
+          <p class="text-[11px] text-ink/50">${dateStr}</p>
+        </div>
+        <span class="text-[11px] font-semibold px-2 py-1 rounded-full ${statusClass}">${statusLabel}</span>
+        <button onclick="completeReminder('${r.id}')" title="Marcar como feito" class="text-sage-dark hover:text-sage p-1">
+          <i data-lucide="check-circle" class="w-4 h-4"></i>
+        </button>
+        <button onclick="deleteReminder('${r.id}')" title="Excluir" class="text-ink/30 hover:text-red-500 p-1">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+/* ============================================================
+   MARCOS DE DESENVOLVIMENTO (Tip 6)
+   ============================================================ */
+function toggleMilestone(key) {
+  const p = getActivePuppy();
+  if (!p) return;
+  ensurePuppyFields(p);
+  if (p.milestones[key]) {
+    // desmarcar: remove o marco e o evento correspondente da linha do tempo
+    const ts = p.milestones[key].date;
+    delete p.milestones[key];
+    state.events = state.events.filter(e => !(e.puppyId === p.id && e.type === 'marco' && e.milestoneKey === key));
+  } else {
+    const now = new Date().toISOString();
+    p.milestones[key] = { date: now };
+    const m = MILESTONES.find(x => x.key === key);
+    state.events.push({ id: uid(), puppyId: p.id, type: 'marco', timestamp: now, milestoneKey: key, name: m ? m.label : key });
+  }
+  saveState();
+  renderAll();
+}
+
+function renderMilestones() {
+  const p = getActivePuppy();
+  const grid = document.getElementById('milestonesGrid');
+  if (!p) { grid.innerHTML = ''; return; }
+  ensurePuppyFields(p);
+  grid.innerHTML = MILESTONES.map(m => {
+    const done = p.milestones[m.key];
+    const dateStr = done ? new Date(done.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+    return `
+      <button onclick="toggleMilestone('${m.key}')" class="flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition ${done ? 'bg-sage-light border-sage' : 'bg-cream/60 border-sage-light hover:border-sage'}">
+        <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${done ? 'bg-sage text-white' : 'bg-white text-sage-dark border border-sage-light'}">
+          <i data-lucide="${done ? 'check' : m.icon}" class="w-4 h-4"></i>
+        </span>
+        <span class="min-w-0">
+          <span class="block text-sm font-semibold truncate ${done ? 'text-sage-dark' : 'text-ink'}">${m.label}</span>
+          <span class="block text-[11px] ${done ? 'text-sage-dark/70' : 'text-ink/40'}">${done ? 'Em ' + dateStr : 'Ainda não'}</span>
+        </span>
+      </button>`;
+  }).join('');
+  lucide.createIcons();
 }
 
 /* ============================================================
@@ -713,22 +1175,48 @@ function renderDashboard() {
     `;
   }).join('');
 
-  const lastFeed = lastEventOfType(p.id, 'mamada');
   const alertsSection = document.getElementById('alertsSection');
   const alertsText = document.getElementById('alertsText');
+  const alerts = [];
+
+  // --- Próxima mamada ---
+  const lastFeed = lastEventOfType(p.id, 'mamada');
   if (lastFeed) {
     const intervalMs = state.settings.feedIntervalHours * 3600000;
     const nextFeedTime = new Date(lastFeed.timestamp).getTime() + intervalMs;
     const remainingMin = Math.round((nextFeedTime - Date.now()) / 60000);
     if (remainingMin <= 0) {
-      alertsSection.classList.remove('hidden');
-      alertsText.innerHTML = `<strong>${p.name}</strong> já passou do horário da próxima mamada (atraso de ${Math.abs(remainingMin)} min).`;
+      alerts.push(`<strong>${p.name}</strong> já passou do horário da próxima mamada (atraso de ${Math.abs(remainingMin)} min).`);
     } else if (remainingMin <= 20) {
-      alertsSection.classList.remove('hidden');
-      alertsText.innerHTML = `Próxima mamada de <strong>${p.name}</strong> em ${remainingMin} min.`;
-    } else {
-      alertsSection.classList.add('hidden');
+      alerts.push(`Próxima mamada de <strong>${p.name}</strong> em ${remainingMin} min.`);
     }
+  }
+
+  // --- Alerta de perda/estagnação de peso (Tip 2) ---
+  if (p.weights && p.weights.length >= 2) {
+    const sortedW = [...p.weights].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const last = sortedW[sortedW.length - 1];
+    const prev = sortedW[sortedW.length - 2];
+    const diff = last.weight - prev.weight;
+    if (diff < 0) {
+      alerts.push(`⚠️ <strong>${p.name}</strong> perdeu <strong>${Math.abs(diff)}g</strong> desde a última pesagem (${prev.weight}g → ${last.weight}g). Observe de perto e considere falar com o veterinário.`);
+    } else if (diff === 0) {
+      alerts.push(`<strong>${p.name}</strong> está com o peso estagnado (${last.weight}g) entre as duas últimas pesagens. Fique de olho na próxima.`);
+    }
+  }
+
+  // --- Lembretes vencendo (Tip 3) ---
+  ensurePuppyFields(p);
+  p.reminders.forEach(r => {
+    const d = daysUntil(r.dueDate);
+    if (d < 0) alerts.push(`Lembrete atrasado: <strong>${r.label}</strong> era para ${new Date(r.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}.`);
+    else if (d === 0) alerts.push(`Hoje é o dia de: <strong>${r.label}</strong>.`);
+    else if (d <= 3) alerts.push(`<strong>${r.label}</strong> em ${d} dia${d > 1 ? 's' : ''} (${new Date(r.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}).`);
+  });
+
+  if (alerts.length) {
+    alertsSection.classList.remove('hidden');
+    alertsText.innerHTML = alerts.map(a => `<p class="${''}">${a}</p>`).join('<div class="h-1.5"></div>');
   } else {
     alertsSection.classList.add('hidden');
   }
@@ -770,6 +1258,7 @@ function renderTimeline() {
     if (e.type === 'peso' && e.weight) detail = `${e.weight}g`;
     if (e.type === 'soneca' && e.durationMin) detail = `${e.durationMin} min`;
     if (e.type === 'foto' && e.caption) detail = e.caption;
+    if (e.type === 'marco' && e.name) detail = e.name;
     if (e.note) detail += (detail ? ' — ' : '') + e.note;
 
     if (e.type === 'foto') {
@@ -877,8 +1366,67 @@ function renderWeightChart() {
   });
 }
 
+/* ============================================================
+   COMPARAÇÃO DE PESO ENTRE OS FILHOTES (Tip 1)
+   ============================================================ */
+let compareChartInstance = null;
+function dayKey(iso) {
+  const d = new Date(iso);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function dayLabel(iso) {
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function renderCompareChart() {
+  const section = document.getElementById('compareSection');
+  const ctx = document.getElementById('compareChart');
+  if (compareChartInstance) { compareChartInstance.destroy(); compareChartInstance = null; }
+  const withWeights = state.puppies.filter(p => p.weights && p.weights.length);
+  // só faz sentido comparar quando há 2+ filhotes com peso registrado
+  if (withWeights.length < 2) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+
+  // eixo X: todos os dias com pesagem, ordenados
+  const keyMap = new Map();
+  withWeights.forEach(p => p.weights.forEach(w => {
+    const k = dayKey(w.date);
+    if (!keyMap.has(k)) keyMap.set(k, dayLabel(w.date));
+  }));
+  const sortedKeys = [...keyMap.keys()].sort();
+  const labels = sortedKeys.map(k => keyMap.get(k));
+
+  const datasets = withWeights.map(p => {
+    const byDay = {};
+    p.weights.forEach(w => { byDay[dayKey(w.date)] = w.weight; }); // última pesagem do dia vence
+    return {
+      label: p.name,
+      data: sortedKeys.map(k => (k in byDay ? byDay[k] : null)),
+      borderColor: p.color,
+      backgroundColor: p.color + '22',
+      tension: 0.35,
+      spanGaps: true,
+      pointRadius: 4,
+      pointBackgroundColor: p.color,
+      fill: false,
+    };
+  });
+
+  compareChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } } },
+      scales: { y: { title: { display: true, text: 'Peso (g)' }, grace: '10%' } }
+    }
+  });
+}
+
 function renderAll() {
   seedInitialPuppies();
+  state.puppies.forEach(ensurePuppyFields);
   const hasPuppies = state.puppies.length > 0;
   document.getElementById('emptyState').classList.toggle('hidden', hasPuppies);
   document.getElementById('appContent').classList.toggle('hidden', !hasPuppies);
@@ -888,9 +1436,13 @@ function renderAll() {
   renderDashboard();
   renderNapButton();
   renderDoseCalc();
+  renderReminders();
+  renderMilestones();
+  renderNotes();
   renderPhotoGrid();
   renderTimeline();
   renderWeightChart();
+  renderCompareChart();
   lucide.createIcons();
 }
 
@@ -936,6 +1488,7 @@ function importBackup(event) {
    INIT
    ============================================================ */
 renderAll();
+restoreSyncIfConfigured();
 setInterval(() => { renderDashboard(); renderNapButton(); }, 30000); // refresh "time ago" labels
 </script>
 </body>
