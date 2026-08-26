@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Fedó</title>
+<title>NinhoCare — Cuidado dos Filhotes</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
@@ -55,7 +55,12 @@
     from { opacity: 0; transform: translateX(-8px); }
     to { opacity: 1; transform: translateX(0); }
   }
-  input:focus, button:focus, select:focus { outline: 2px solid #6B8F71; outline-offset: 2px; }
+  .photo-tile { animation: popIn 0.25s ease-out; }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  input:focus, button:focus, select:focus, textarea:focus { outline: 2px solid #6B8F71; outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -102,6 +107,9 @@
   </div>
 
   <div id="appContent" class="hidden space-y-6">
+
+    <!-- ============ PUPPY HEADER CARD ============ -->
+    <section id="puppyHeaderCard" class="bg-white rounded-3xl border border-sage-light p-4 flex items-center gap-4"></section>
 
     <!-- ============ DASHBOARD SUMMARY ============ -->
     <section>
@@ -173,6 +181,26 @@
       </div>
     </section>
 
+    <!-- ============ DOSE CALCULATOR ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <h2 class="font-display text-lg font-semibold mb-1">Dose recomendada (PetMilk)</h2>
+      <p class="text-xs text-ink/50 mb-3">Calculada automaticamente a partir da última pesagem registrada.</p>
+      <div id="doseCalc" class="grid grid-cols-3 gap-3"></div>
+    </section>
+
+    <!-- ============ PHOTO DIARY ============ -->
+    <section class="bg-white rounded-3xl border border-sage-light p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-display text-lg font-semibold">Diário de fotos</h2>
+        <button onclick="triggerPhotoUpload()" class="text-xs font-semibold text-sage-dark bg-sage-light px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-sage-light/70 transition">
+          <i data-lucide="camera" class="w-3.5 h-3.5"></i> Adicionar foto
+        </button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoSelected(event)">
+      </div>
+      <div id="photoGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+      <p id="photoEmptyMsg" class="hidden text-sm text-ink/50 text-center py-6">Ainda não há fotos no diário deste filhote. Toque em "Adicionar foto" para começar.</p>
+    </section>
+
     <!-- ============ TIMELINE / HISTORY ============ -->
     <section class="bg-white rounded-3xl border border-sage-light p-4">
       <div class="flex items-center justify-between mb-3 gap-2">
@@ -186,6 +214,7 @@
           <option value="soneca">Soneca</option>
           <option value="remedio">Remédio/Vacina</option>
           <option value="peso">Peso</option>
+          <option value="foto">Fotos</option>
         </select>
       </div>
       <div id="timelineList" class="space-y-2 max-h-96 overflow-y-auto"></div>
@@ -216,6 +245,18 @@
   <div id="modalCard" class="bg-cream w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-5 max-h-[85vh] overflow-y-auto"></div>
 </div>
 
+<!-- ============ PHOTO LIGHTBOX ============ -->
+<div id="lightboxRoot" class="fixed inset-0 z-50 hidden bg-ink/90 flex items-center justify-center p-4" onclick="if(event.target===this) closeLightbox()">
+  <div class="max-w-md w-full">
+    <img id="lightboxImg" class="w-full rounded-2xl mb-3" src="">
+    <p id="lightboxCaption" class="text-white text-sm text-center mb-3"></p>
+    <div class="flex justify-center gap-3">
+      <button onclick="closeLightbox()" class="text-xs font-semibold bg-white/10 text-white px-4 py-2 rounded-full">Fechar</button>
+      <button id="lightboxDeleteBtn" class="text-xs font-semibold bg-red-500/80 text-white px-4 py-2 rounded-full">Excluir foto</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    STATE + PERSISTENCE
@@ -225,7 +266,7 @@ let state = loadState();
 let activeNap = null; // {puppyId, start}
 
 function defaultState() {
-  return { puppies: [], events: [], activePuppyId: null, settings: { feedIntervalHours: 3 } };
+  return { puppies: [], events: [], activePuppyId: null, settings: { feedIntervalHours: 3 }, seeded: false };
 }
 
 function loadState() {
@@ -246,7 +287,7 @@ function saveState() {
     flashSaved();
   } catch (e) {
     console.error('Erro ao salvar', e);
-    document.getElementById('saveText').textContent = 'Erro ao salvar — verifique o espaço do navegador';
+    document.getElementById('saveText').textContent = 'Erro ao salvar — espaço do navegador pode estar cheio';
   }
 }
 
@@ -266,6 +307,27 @@ function flashSaved() {
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+/* ============================================================
+   SEED — Marrom, Pintadinho e Pretinha com pesos de hoje
+   ============================================================ */
+function seedInitialPuppies() {
+  if (state.seeded || state.puppies.length > 0) return;
+  const now = new Date().toISOString();
+  const seedData = [
+    { name: 'Pretinha', color: '#516C57', weight: 347 },
+    { name: 'Pintadinho', color: '#C98A4B', weight: 283 },
+    { name: 'Marrom', color: '#6B8F71', weight: 294 },
+  ];
+  seedData.forEach(s => {
+    const p = { id: uid(), name: s.name, species: 'Cão', breed: '', birthDate: null, color: s.color, weights: [{ date: now, weight: s.weight }] };
+    state.puppies.push(p);
+    state.events.push({ id: uid(), puppyId: p.id, type: 'peso', timestamp: now, weight: s.weight });
+  });
+  state.activePuppyId = state.puppies[0].id;
+  state.seeded = true;
+  saveState();
+}
 
 /* ============================================================
    PUPPY MANAGEMENT
@@ -293,6 +355,23 @@ function renderPuppySelector() {
     el.appendChild(btn);
   });
   lucide.createIcons();
+}
+
+function renderPuppyHeaderCard() {
+  const p = getActivePuppy();
+  const card = document.getElementById('puppyHeaderCard');
+  if (!p) { card.innerHTML = ''; return; }
+  const latestWeight = p.weights.length ? [...p.weights].sort((a,b) => new Date(b.date)-new Date(a.date))[0] : null;
+  card.innerHTML = `
+    <span class="w-16 h-16 shrink-0 rounded-blob flex items-center justify-center text-white font-display font-semibold text-2xl" style="background:${p.color}">
+      ${p.name.slice(0,2).toUpperCase()}
+    </span>
+    <div class="min-w-0">
+      <p class="font-display text-xl font-semibold truncate">${p.name}</p>
+      <p class="text-xs text-ink/50">${p.species}${p.breed ? ' · ' + p.breed : ''}</p>
+      ${latestWeight ? `<p class="text-sm font-semibold text-sage-dark mt-1">${latestWeight.weight}g <span class="font-normal text-ink/40">· última pesagem</span></p>` : ''}
+    </div>
+  `;
 }
 
 function openPuppyModal() {
@@ -376,6 +455,7 @@ const TYPE_META = {
   soneca: { label: 'Soneca',         icon: 'moon' },
   remedio:{ label: 'Remédio/Vacina', icon: 'syringe' },
   peso:   { label: 'Peso',           icon: 'scale' },
+  foto:   { label: 'Foto',           icon: 'image' },
 };
 
 function quickLog(type, extra = {}) {
@@ -445,10 +525,20 @@ function openWeightModal() {
   openModal(`
     <h3 class="font-display text-lg font-semibold mb-4">Registrar peso — ${p.name}</h3>
     <label class="text-xs font-semibold text-ink/60">Peso (gramas)</label>
-    <input id="weightVal" type="number" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: 280">
+    <input id="weightVal" type="number" oninput="previewDose()" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: 280">
+    <div id="dosePreview" class="mt-3 text-xs text-sage-dark bg-sage-light/60 rounded-xl p-3 hidden"></div>
     <button onclick="saveWeight()" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Salvar peso</button>
   `);
 }
+function previewDose() {
+  const val = parseFloat(document.getElementById('weightVal').value);
+  const box = document.getElementById('dosePreview');
+  if (!val) { box.classList.add('hidden'); return; }
+  const dose = computeDose(val);
+  box.classList.remove('hidden');
+  box.innerHTML = `Com ${val}g: <strong>${dose.daily.toFixed(1)}ml/dia</strong> — ${dose.per3h.toFixed(1)}ml a cada 3h ou ${dose.per5h.toFixed(1)}ml a cada 5h`;
+}
+
 function saveWeight() {
   const p = getActivePuppy();
   const val = parseFloat(document.getElementById('weightVal').value);
@@ -464,6 +554,109 @@ function deleteEvent(id) {
   state.events = state.events.filter(e => e.id !== id);
   saveState();
   renderAll();
+}
+
+/* ============================================================
+   PHOTO DIARY
+   ============================================================ */
+function triggerPhotoUpload() {
+  if (!getActivePuppy()) { alert('Selecione um filhote primeiro.'); return; }
+  document.getElementById('photoInput').click();
+}
+
+function compressImage(file, maxWidth = 900, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoSelected(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const p = getActivePuppy();
+  if (!p) return;
+  let dataUrl;
+  try {
+    dataUrl = await compressImage(file);
+  } catch (err) {
+    alert('Não foi possível processar essa imagem.');
+    return;
+  }
+  openModal(`
+    <h3 class="font-display text-lg font-semibold mb-4">Nova foto — ${p.name}</h3>
+    <img src="${dataUrl}" class="w-full rounded-2xl mb-3 max-h-64 object-cover">
+    <label class="text-xs font-semibold text-ink/60">Legenda (opcional)</label>
+    <input id="photoCaption" type="text" class="w-full mt-1 px-3 py-2.5 rounded-xl border border-sage-light bg-white" placeholder="Ex: primeira vez de olhinhos abertos">
+    <button onclick="savePhoto('${dataUrl.replace(/'/g, "\\'")}')" class="w-full mt-5 bg-sage text-white font-semibold py-3 rounded-full hover:bg-sage-dark transition">Salvar no diário</button>
+  `);
+}
+
+function savePhoto(dataUrl) {
+  const p = getActivePuppy();
+  const caption = document.getElementById('photoCaption').value.trim();
+  try {
+    state.events.push({ id: uid(), puppyId: p.id, type: 'foto', timestamp: new Date().toISOString(), dataUrl, caption });
+    saveState();
+    closeModal();
+    renderAll();
+  } catch (err) {
+    alert('Não foi possível salvar a foto — o armazenamento do navegador pode estar cheio. Tente exportar um backup e liberar espaço.');
+    console.error(err);
+  }
+}
+
+function openLightbox(eventId) {
+  const ev = state.events.find(e => e.id === eventId);
+  if (!ev) return;
+  document.getElementById('lightboxImg').src = ev.dataUrl;
+  document.getElementById('lightboxCaption').textContent = ev.caption || '';
+  document.getElementById('lightboxDeleteBtn').onclick = () => {
+    if (confirm('Excluir esta foto do diário?')) {
+      deleteEvent(eventId);
+      closeLightbox();
+    }
+  };
+  document.getElementById('lightboxRoot').classList.remove('hidden');
+}
+function closeLightbox() {
+  document.getElementById('lightboxRoot').classList.add('hidden');
+}
+
+function renderPhotoGrid() {
+  const p = getActivePuppy();
+  const grid = document.getElementById('photoGrid');
+  const emptyMsg = document.getElementById('photoEmptyMsg');
+  if (!p) { grid.innerHTML = ''; return; }
+  const photos = state.events.filter(e => e.puppyId === p.id && e.type === 'foto')
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  if (!photos.length) {
+    grid.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg.classList.add('hidden');
+  grid.innerHTML = photos.map(ph => `
+    <button onclick="openLightbox('${ph.id}')" class="photo-tile aspect-square rounded-xl overflow-hidden bg-sage-light">
+      <img src="${ph.dataUrl}" class="w-full h-full object-cover">
+    </button>
+  `).join('');
 }
 
 /* ============================================================
@@ -520,7 +713,6 @@ function renderDashboard() {
     `;
   }).join('');
 
-  // Alerts: next feeding
   const lastFeed = lastEventOfType(p.id, 'mamada');
   const alertsSection = document.getElementById('alertsSection');
   const alertsText = document.getElementById('alertsText');
@@ -577,7 +769,20 @@ function renderTimeline() {
     if (e.type === 'remedio' && e.name) detail = e.name;
     if (e.type === 'peso' && e.weight) detail = `${e.weight}g`;
     if (e.type === 'soneca' && e.durationMin) detail = `${e.durationMin} min`;
+    if (e.type === 'foto' && e.caption) detail = e.caption;
     if (e.note) detail += (detail ? ' — ' : '') + e.note;
+
+    if (e.type === 'foto') {
+      return `
+        <button onclick="openLightbox('${e.id}')" class="timeline-item w-full flex items-center gap-3 bg-cream/60 rounded-xl px-3 py-2.5 text-left">
+          <img src="${e.dataUrl}" class="w-9 h-9 rounded-lg object-cover shrink-0">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold">Foto ${detail ? `<span class="font-normal text-ink/60">· ${detail}</span>` : ''}</p>
+            <p class="text-[11px] text-ink/50">${time}</p>
+          </div>
+        </button>
+      `;
+    }
     return `
       <div class="timeline-item flex items-center gap-3 bg-cream/60 rounded-xl px-3 py-2.5">
         <div class="w-9 h-9 rounded-full bg-sage-light flex items-center justify-center shrink-0">
@@ -594,6 +799,47 @@ function renderTimeline() {
     `;
   }).join('');
   lucide.createIcons();
+}
+
+/* ============================================================
+   DOSE CALCULATOR — PetMilk
+   Fórmula do fabricante: 25 mL de solução final por 100g de peso/dia
+   (dose diária ÷ 8 = a cada 3h · dose diária ÷ 5 = a cada 5h)
+   ============================================================ */
+function computeDose(weightG) {
+  const dailyMl = weightG * 0.25;
+  return { daily: dailyMl, per3h: dailyMl / 8, per5h: dailyMl / 5 };
+}
+
+function latestWeightOf(p) {
+  if (!p || !p.weights.length) return null;
+  return [...p.weights].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+}
+
+function renderDoseCalc() {
+  const p = getActivePuppy();
+  const el = document.getElementById('doseCalc');
+  if (!p) { el.innerHTML = ''; return; }
+  const latest = latestWeightOf(p);
+  if (!latest) {
+    el.innerHTML = `<p class="col-span-3 text-sm text-ink/50 text-center py-4">Registre um peso para calcular a dose de ${p.name}.</p>`;
+    return;
+  }
+  const dose = computeDose(latest.weight);
+  el.innerHTML = `
+    <div class="bg-cream rounded-2xl p-3 text-center">
+      <p class="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Total/dia</p>
+      <p class="font-display text-lg font-semibold text-sage-dark mt-0.5">${dose.daily.toFixed(1)}ml</p>
+    </div>
+    <div class="bg-cream rounded-2xl p-3 text-center">
+      <p class="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">A cada 3h</p>
+      <p class="font-display text-lg font-semibold text-sage-dark mt-0.5">${dose.per3h.toFixed(1)}ml</p>
+    </div>
+    <div class="bg-cream rounded-2xl p-3 text-center">
+      <p class="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">A cada 5h</p>
+      <p class="font-display text-lg font-semibold text-sage-dark mt-0.5">${dose.per5h.toFixed(1)}ml</p>
+    </div>
+  `;
 }
 
 let chartInstance = null;
@@ -632,13 +878,17 @@ function renderWeightChart() {
 }
 
 function renderAll() {
+  seedInitialPuppies();
   const hasPuppies = state.puppies.length > 0;
   document.getElementById('emptyState').classList.toggle('hidden', hasPuppies);
   document.getElementById('appContent').classList.toggle('hidden', !hasPuppies);
   if (hasPuppies && !getActivePuppy()) state.activePuppyId = state.puppies[0].id;
   renderPuppySelector();
+  renderPuppyHeaderCard();
   renderDashboard();
   renderNapButton();
+  renderDoseCalc();
+  renderPhotoGrid();
   renderTimeline();
   renderWeightChart();
   lucide.createIcons();
