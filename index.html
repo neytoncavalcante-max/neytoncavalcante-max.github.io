@@ -560,16 +560,6 @@ function stopSync() {
   saveSyncConfig(null);
   setSyncStatus('off');
 }
-function stopSync() {
-  if (sync.unsub) { try { sync.unsub(); } catch {} }
-  try { firebase.app().delete(); } catch {}
-  sync.active = false;
-  sync.unsub = null;
-  sync.docRef = null;
-  sync.cfg = null;
-  saveSyncConfig(null);
-  setSyncStatus('off');
-}
 
 /* --- Interface de configuração --- */
 function isEditorLoggedIn() {
