@@ -502,7 +502,7 @@ async function pushNow() {
   }
 }
 
-const BACKUP_INTERVAL_MS = 60 * 1000; // 1 minuto
+const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 horas
 const MAX_BACKUPS = 20;
 
 async function pushBackupIfDue() {
