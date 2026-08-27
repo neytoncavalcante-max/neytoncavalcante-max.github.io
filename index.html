@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -494,12 +495,64 @@ async function pushNow() {
       updatedBy: sync.deviceId,
     });
     setSyncStatus('online', 'Sincronizado');
+    pushBackupIfDue();
   } catch (e) {
     console.error('Erro ao enviar dados', e);
     setSyncStatus('error');
   }
 }
 
+const BACKUP_INTERVAL_MS = 60 * 1000; // 1 minuto
+const MAX_BACKUPS = 20;
+
+async function pushBackupIfDue() {
+  if (!sync.active || !sync.docRef) return;
+
+  try {
+    const metaRef = sync.docRef.collection('backups').doc('_meta');
+    const metaSnap = await metaRef.get();
+    const lastBackupAt = metaSnap.exists ? metaSnap.data().lastBackupAt : 0;
+    const now = Date.now();
+
+    if (now - lastBackupAt < BACKUP_INTERVAL_MS) return;
+
+    const backupId = new Date(now).toISOString().replace(/[:.]/g, '-');
+
+    await sync.docRef.collection('backups').doc(backupId).set({
+      payload: JSON.stringify(state),
+      createdAt: now,
+      createdBy: sync.deviceId
+    });
+
+    await metaRef.set({ lastBackupAt: now });
+
+    const allBackups = await sync.docRef.collection('backups')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const docs = allBackups.docs.filter(d => d.id !== '_meta');
+
+    if (docs.length > MAX_BACKUPS) {
+      const toDelete = docs.slice(MAX_BACKUPS);
+      for (const d of toDelete) {
+        await d.ref.delete();
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao criar backup automático', e);
+  }
+}
+
+function stopSync() {
+  if (sync.unsub) { try { sync.unsub(); } catch {} }
+  try { firebase.app().delete(); } catch {}
+  sync.active = false;
+  sync.unsub = null;
+  sync.docRef = null;
+  sync.cfg = null;
+  saveSyncConfig(null);
+  setSyncStatus('off');
+}
 function stopSync() {
   if (sync.unsub) { try { sync.unsub(); } catch {} }
   try { firebase.app().delete(); } catch {}
