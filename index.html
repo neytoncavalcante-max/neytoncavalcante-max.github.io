@@ -5,6 +5,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>NinhoCare — Cuidado dos Filhotes</title>
+
+<!-- Meta tags básicas: descrição e cor do tema -->
+<meta name="description" content="NinhoCare: o diário da família para acompanhar o cuidado dos filhotes — mamadas, peso, sonecas, vacinas, fotos e marcos importantes.">
+<meta name="theme-color" content="#6B8F71">
+
+<!-- Open Graph: deixa a prévia bonita ao compartilhar o link no WhatsApp e redes sociais -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="NinhoCare — Cuidado dos Filhotes">
+<meta property="og:description" content="O diário da família para acompanhar o cuidado dos filhotes com carinho.">
+<meta property="og:locale" content="pt_BR">
+
 <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -783,10 +794,32 @@ function renderPuppySelector() {
   lucide.createIcons();
 }
 
+/* Calcula quantos dias o filhote tem a partir da data de nascimento.
+   birthDate vem no formato 'AAAA-MM-DD' (ou null, se não foi informado).
+   Retorna null quando não há data, para o card saber que não deve mostrar nada. */
+function diasDeVida(birthDate) {
+  if (!birthDate) return null;
+  // O 'T00:00:00' garante que a data seja lida no fuso local, sem pular um dia.
+  const nascimento = new Date(birthDate + 'T00:00:00');
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0); // zera as horas para contar dias inteiros
+  const umDiaEmMs = 1000 * 60 * 60 * 24;
+  const dias = Math.floor((hoje - nascimento) / umDiaEmMs);
+  return dias >= 0 ? dias : null; // ignora datas no futuro
+}
+
+/* Monta um texto amigável: "Nasceu hoje!", "1 dia de vida", "12 dias de vida"... */
+function textoDiasDeVida(dias) {
+  if (dias === 0) return 'Nasceu hoje!';
+  if (dias === 1) return '1 dia de vida';
+  return `${dias} dias de vida`;
+}
+
 function renderPuppyHeaderCard() {
   const p = getActivePuppy();
   const card = document.getElementById('puppyHeaderCard');
   if (!p) { card.innerHTML = ''; return; }
+  const dias = diasDeVida(p.birthDate);
   const latestWeight = p.weights.length ? [...p.weights].sort((a,b) => new Date(b.date)-new Date(a.date))[0] : null;
   card.innerHTML = `
     <span class="w-16 h-16 shrink-0 rounded-blob flex items-center justify-center text-white font-display font-semibold text-2xl" style="background:${p.color}">
@@ -795,6 +828,9 @@ function renderPuppyHeaderCard() {
     <div class="min-w-0">
       <p class="font-display text-xl font-semibold truncate">${p.name}</p>
       <p class="text-xs text-ink/50">${p.species}${p.breed ? ' · ' + p.breed : ''}</p>
+      ${dias !== null ? `<span class="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold text-sage-dark bg-sage-light px-2.5 py-1 rounded-full">
+        <i data-lucide="cake" class="w-3.5 h-3.5"></i> ${textoDiasDeVida(dias)}
+      </span>` : ''}
       ${latestWeight ? `<p class="text-sm font-semibold text-sage-dark mt-1">${latestWeight.weight}g <span class="font-normal text-ink/40">· última pesagem</span></p>` : ''}
     </div>
   `;
