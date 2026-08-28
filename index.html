@@ -332,9 +332,10 @@ function saveState(opts = {}) {
     console.error('Erro ao salvar', e);
     document.getElementById('saveText').textContent = 'Erro ao salvar — espaço do navegador pode estar cheio';
   }
-  // Empurra para a nuvem quando o modo compartilhado está ativo,
-  // exceto quando a mudança veio justamente da nuvem (opts.remote).
-  if (!opts.remote && sync.active) schedulePush();
+  // Empurra para a nuvem somente quando o modo compartilhado está ativo
+  // E o usuário está autenticado como editor. O filhote selecionado é uma
+  // preferência local do aparelho e nunca deve ser sincronizado.
+  if (!opts.remote && sync.active && isEditorLoggedIn()) schedulePush();
 }
 
 let flashTimeout;
@@ -453,7 +454,11 @@ async function initFirebaseSync(cfg, { isNew } = {}) {
       if (data.updatedBy === sync.deviceId && data.updatedAt === sync.lastPushedAt) return;
       try {
         const remote = JSON.parse(data.payload);
-        state = { ...defaultState(), ...remote };
+        // activePuppyId pertence somente a este aparelho.
+        // Nunca deixe uma sincronização remota trocar o filhote que o usuário
+        // está visualizando.
+        const localActivePuppyId = state.activePuppyId;
+        state = { ...defaultState(), ...remote, activePuppyId: localActivePuppyId };
         saveState({ remote: true });
         renderAll();
       } catch (e) { console.error('Erro ao aplicar dados remotos', e); }
@@ -481,12 +486,17 @@ function schedulePush() {
 }
 
 async function pushNow() {
-  if (!sync.active || !sync.docRef) return;
+  // Somente usuários autenticados como editores podem escrever na nuvem.
+  if (!sync.active || !sync.docRef || !isEditorLoggedIn()) return;
   const updatedAt = Date.now();
   sync.lastPushedAt = updatedAt;
   try {
+    // activePuppyId é uma preferência local: não deve viajar para outros
+    // aparelhos nem voltar da nuvem sobrescrevendo a seleção local.
+    const payloadState = { ...state };
+    delete payloadState.activePuppyId;
     await sync.docRef.set({
-      payload: JSON.stringify(state),
+      payload: JSON.stringify(payloadState),
       updatedAt,
       updatedBy: sync.deviceId,
     });
@@ -502,7 +512,7 @@ const BACKUP_INTERVAL_MS = 60 * 1000; // 1 minuto
 const MAX_BACKUPS = 20;
 
 async function pushBackupIfDue() {
-  if (!sync.active || !sync.docRef) return;
+  if (!sync.active || !sync.docRef || !isEditorLoggedIn()) return;
 
   try {
     const metaRef = sync.docRef.collection('backups').doc('_meta');
