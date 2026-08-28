@@ -213,27 +213,10 @@
     <!-- ============ PETMILK DAILY TOTAL (soma dos filhotes) ============ -->
     <section class="bg-white rounded-3xl border border-sage-light p-4">
       <h2 class="font-display text-lg font-semibold mb-1">PetMilk do dia — todos os filhotes 🍼</h2>
-      <p class="text-xs text-ink/50 mb-3">Soma o total/dia de cada filhote com peso registrado e calcula quanto pó e água preparar.</p>
+      <p class="text-xs text-ink/50 mb-3">Soma o total/dia de cada filhote com peso registrado e calcula quanto pó e água preparar. Proporção padrão: 1 medida (8g de pó) + 40ml de água = 50ml prontos.</p>
       <div id="petmilkTotalCards" class="grid grid-cols-2 gap-3 mb-4"></div>
-      <div class="bg-cream rounded-2xl p-3">
-        <p class="text-[11px] font-semibold text-ink/50 uppercase tracking-wide mb-2">Proporção da mistura</p>
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="text-[11px] text-ink/50">Pó (g)</label>
-            <input id="ratioPowder" type="number" step="0.1" min="0.1" oninput="onRatioChange()" class="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-sage-light bg-white text-sm">
-          </div>
-          <div>
-            <label class="text-[11px] text-ink/50">Água (ml)</label>
-            <input id="ratioWater" type="number" step="0.1" min="0.1" oninput="onRatioChange()" class="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-sage-light bg-white text-sm">
-          </div>
-          <div>
-            <label class="text-[11px] text-ink/50">Total (ml)</label>
-            <input id="ratioTotal" type="number" step="0.1" min="0.1" oninput="onRatioChange()" class="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-sage-light bg-white text-sm">
-          </div>
-        </div>
-        <p class="text-[11px] text-ink/40 mt-2">Padrão: 1 medida (8g de pó) + 40ml de água = 50ml prontos.</p>
-      </div>
-      <div id="petmilkMixResult" class="mt-3 text-sm font-semibold text-sage-dark bg-sage-light/60 rounded-xl p-3"></div>
+      <div id="petmilkMixResult" class="text-sm font-semibold text-sage-dark bg-sage-light/60 rounded-xl p-3"></div>
+      <div id="petmilkFeedResult" class="mt-2 text-sm font-semibold text-teal bg-teal/10 rounded-xl p-3"></div>
     </section>
 
     <!-- ============ REMINDERS (vacina / vermífugo) ============ -->
@@ -1522,23 +1505,14 @@ function renderDoseCalc() {
 /* ============================================================
    PETMILK — TOTAL DIÁRIO SOMADO DE TODOS OS FILHOTES
    ============================================================ */
-function onRatioChange() {
-  const powder = parseFloat(document.getElementById('ratioPowder').value) || 0;
-  const water = parseFloat(document.getElementById('ratioWater').value) || 0;
-  const total = parseFloat(document.getElementById('ratioTotal').value) || 0;
-  if (powder <= 0 || water <= 0 || total <= 0) return;
-  state.settings.petMilkRatio = { powder, water, total };
-  saveState();
-  renderPetMilkTotal();
-}
+/* Proporção fixa do PetMilk: 1 medida = 8g de pó + 40ml de água = 50ml prontos */
+const PETMILK_RATIO = { powder: 8, water: 40, total: 50 };
 
 function renderPetMilkTotal() {
   const cardsEl = document.getElementById('petmilkTotalCards');
   const resultEl = document.getElementById('petmilkMixResult');
-  const ratio = state.settings.petMilkRatio || (state.settings.petMilkRatio = { powder: 8, water: 40, total: 50 });
-  document.getElementById('ratioPowder').value = ratio.powder;
-  document.getElementById('ratioWater').value = ratio.water;
-  document.getElementById('ratioTotal').value = ratio.total;
+  const feedEl = document.getElementById('petmilkFeedResult');
+  const ratio = PETMILK_RATIO;
 
   const withWeight = state.puppies
     .map(p => ({ p, latest: latestWeightOf(p) }))
@@ -1547,10 +1521,14 @@ function renderPetMilkTotal() {
   if (!withWeight.length) {
     cardsEl.innerHTML = `<p class="col-span-2 text-sm text-ink/50 text-center py-4">Registre o peso dos filhotes para calcular o total do dia.</p>`;
     resultEl.innerHTML = '';
+    feedEl.innerHTML = '';
     return;
   }
 
-  const totalDailyMl = withWeight.reduce((sum, x) => sum + computeDose(x.latest.weight).daily, 0);
+  const doses = withWeight.map(x => computeDose(x.latest.weight));
+  const totalDailyMl = doses.reduce((sum, d) => sum + d.daily, 0);
+  const totalPerFeedMl = doses.reduce((sum, d) => sum + d.per5h, 0);
+
   cardsEl.innerHTML = `
     <div class="bg-cream rounded-2xl p-3 text-center">
       <p class="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Filhotes somados</p>
@@ -1562,10 +1540,17 @@ function renderPetMilkTotal() {
     </div>
   `;
 
-  const medidas = totalDailyMl / ratio.total;
-  const totalPowder = medidas * ratio.powder;
-  const totalWater = medidas * ratio.water;
-  resultEl.innerHTML = `🍼 Prepare <strong>${totalPowder.toFixed(1)}g de PetMilk</strong> + <strong>${totalWater.toFixed(1)}ml de água</strong> (≈${medidas.toFixed(2)} medidas) e produzir ${totalDailyMl.toFixed(1)}ml — o suficiente pro dia todo dos filhotes acima.`;
+  // Água/medida = (água por medida / total por medida) × volume desejado — mantém a proporção correta.
+  const mixFor = (ml) => {
+    const medidas = ml / ratio.total;
+    return { powder: medidas * ratio.powder, water: medidas * ratio.water, medidas };
+  };
+
+  const daily = mixFor(totalDailyMl);
+  resultEl.innerHTML = `🍼 <strong>Dia todo:</strong> prepare <strong>${daily.powder.toFixed(1)}g de PetMilk</strong> + <strong>${daily.water.toFixed(1)}ml de água</strong> (≈${daily.medidas.toFixed(2)} medidas) e produzir ${totalDailyMl.toFixed(1)}ml — o suficiente pro dia todo dos filhotes acima.`;
+
+  const perFeed = mixFor(totalPerFeedMl);
+  feedEl.innerHTML = `⏰ <strong>1 mamada (a cada 5h):</strong> prepare <strong>${perFeed.powder.toFixed(1)}g de PetMilk</strong> + <strong>${perFeed.water.toFixed(1)}ml de água</strong> e produzir ${totalPerFeedMl.toFixed(1)}ml.`;
 }
 
 let chartInstance = null;
