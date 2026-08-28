@@ -16,6 +16,15 @@
 <meta property="og:description" content="O diário da família para acompanhar o cuidado dos filhotes com carinho.">
 <meta property="og:locale" content="pt_BR">
 
+<!-- PWA: deixa o site instalável como app no Android e no iPhone -->
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Filhotes">
+
 <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -1744,6 +1753,13 @@ function importBackup(event) {
 renderAll();
 restoreSyncIfConfigured();
 setInterval(() => { renderDashboard(); renderNapButton(); }, 30000); // refresh "time ago" labels
+
+// Registra o service worker (deixa o site instalável como app / PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((e) => console.error('Erro ao registrar service worker', e));
+  });
+}
 </script>
 </body>
 </html>
