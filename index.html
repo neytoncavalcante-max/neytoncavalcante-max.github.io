@@ -382,15 +382,35 @@ const sync = {
   currentUser: null,
 };
 
+/* Configuração fixa do projeto Firebase "filhotes-app".
+   Isso permite que o site conecte sozinho ao modo compartilhado
+   assim que a página abre, sem precisar colar nada manualmente.
+   A apiKey de um app Firebase Web é pública por natureza (não é segredo);
+   quem protege os dados são as regras do Firestore e o login de editor. */
+const DEFAULT_SYNC_CONFIG = {
+  firebaseConfig: {
+    apiKey: "AIzaSyANJP8AjS8LSp8-eMdHB12c_QYVVrDXCuo",
+    authDomain: "filhotes-app.firebaseapp.com",
+    databaseURL: "https://filhotes-app-default-rtdb.firebaseio.com",
+    projectId: "filhotes-app",
+    storageBucket: "filhotes-app.firebasestorage.app",
+    messagingSenderId: "451985875703",
+    appId: "1:451985875703:web:9dda555f089a152a9129f2",
+    measurementId: "G-W5CJK78MS8"
+  },
+  roomId: "ninho-kessya",
+};
+
 function loadSyncConfig() {
   try {
     const raw = localStorage.getItem(SYNC_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    if (raw === 'off') return null; // usuário desligou a sincronização neste aparelho de propósito
+    return raw ? JSON.parse(raw) : DEFAULT_SYNC_CONFIG;
+  } catch { return DEFAULT_SYNC_CONFIG; }
 }
 function saveSyncConfig(cfg) {
   if (cfg) localStorage.setItem(SYNC_KEY, JSON.stringify(cfg));
-  else localStorage.removeItem(SYNC_KEY);
+  else localStorage.setItem(SYNC_KEY, 'off');
 }
 
 /* Tenta interpretar tanto um JSON puro quanto o trecho
@@ -659,7 +679,7 @@ function handleLoginButton() {
 }
 function openSyncModal() {
   const connected = sync.active;
-  const cfg = sync.cfg || {};
+  const cfg = sync.cfg || DEFAULT_SYNC_CONFIG;
   openModal(`
     <div class="flex items-center gap-2 mb-1">
       <i data-lucide="users" class="w-5 h-5 text-sage-dark"></i>
